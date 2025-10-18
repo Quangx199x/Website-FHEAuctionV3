@@ -1,0 +1,26 @@
+/* src/components/WalletConnect.css */
+
+.wallet-buttons {
+  margin-top: 15px;
+}
+/* src/components/WalletConnect.css - THÊM VÀO CUỐI */
+
+.wrong-network-badge {
+  margin-left: 10px;
+}
+
+.metamask-warning {
+  margin-top: 15px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 65, 0.5);
+  background: rgba(255, 255, 65, 0.1);
+  font-size: 12px;
+}
+
+.ready-status {
+  color: #00ff41;
+}
+
+.error-status {
+  color: #ff0041;
+}

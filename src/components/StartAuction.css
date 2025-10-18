@@ -1,0 +1,49 @@
+/* src/components/StartAuction.css */
+
+.auction-control-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-top: 15px;
+}
+
+.control-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.control-section h3 {
+  font-size: 14px;
+  color: #00ff41;
+  text-shadow: 0 0 10px #00ff41;
+  letter-spacing: 2px;
+  margin: 0;
+}
+
+.instructions-box {
+  padding: 15px;
+  border: 1px solid rgba(0, 255, 65, 0.3);
+  background: rgba(0, 255, 65, 0.05);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.status-indicator {
+  padding: 10px;
+  border-radius: 4px;
+  text-align: center;
+  font-weight: bold;
+}
+
+.status-indicator.active {
+  background: rgba(0, 255, 65, 0.1);
+  border: 1px solid #00ff41;
+  color: #00ff41;
+}
+
+.status-indicator.idle {
+  background: rgba(255, 0, 65, 0.1);
+  border: 1px solid #ff0041;
+  color: #ff0041;
+}

@@ -1,0 +1,25 @@
+/* src/components/Header.css */
+
+.header-box {
+  margin-bottom: 20px;
+}
+
+.header-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.header-title {
+  font-size: 45px;
+  letter-spacing: 2px;
+}
+
+.header-social {
+  display: flex;
+  gap: 15px;
+}
+
+.header-social .btn {
+  padding: 8px 15px;
+}
