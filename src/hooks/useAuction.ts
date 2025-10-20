@@ -114,21 +114,21 @@ export function useAuction() {
   }, [estimatedEndTime])
 
   const getStateString = () => {
-    if (auctionState === undefined) return 'LOADING'
-    
-    const stateNum = Number(auctionState)
-    console.log('🎯 State Number:', stateNum)
-    
-    // AuctionState enum: IDLE=0, ACTIVE=1, ENDED=2, FINALIZED=3, EMERGENCY=4
-    switch (stateNum) {
-      case 0: return 'IDLE'
-      case 1: return 'ACTIVE'
-      case 2: return 'ENDED'
-      case 3: return 'FINALIZED'
-      case 4: return 'EMERGENCY'
-      default: return 'UNKNOWN'
-    }
+  if (auctionState === undefined) return 'LOADING'
+  
+  const stateNum = Number(auctionState)
+  console.log('🎯 State Number:', stateNum)
+  
+  // FIXED: Mapping đúng 100% theo contract
+  switch (stateNum) {
+    case 0: return 'ACTIVE'      // Đang nhận bids
+    case 1: return 'ENDED'       // Đã hết hạn
+    case 2: return 'FINALIZING'  // Đang decrypt
+    case 3: return 'FINALIZED'   // Hoàn thành
+    case 4: return 'EMERGENCY'   // Emergency
+    default: return 'UNKNOWN'
   }
+}
 
   const blocksRemaining = () => {
     if (!auctionEndBlock || !currentBlock) return 0
@@ -154,15 +154,15 @@ export function useAuction() {
     return Math.min(Math.max(percentage, 0), 100)
   }
 
-  const auction = {
-    startBlock: auctionEndBlock ? Number(auctionEndBlock) - 300 : 0,
-    endBlock: auctionEndBlock ? Number(auctionEndBlock) : 0,
-    minIncrement: minIncrement || minDeposit || BigInt(0),
-    maxBidders: maxBidders ? Number(maxBidders) : 50,
-    validBiddersCount: roundBidders ? (roundBidders as readonly string[]).length : 0,
-    currentLeader: leadBidder as string || '0x0000000000000000000000000000000000000000',
-    isFinalized: Number(auctionState) === 3,
-  }
+ const auction = {
+  startBlock: auctionEndBlock ? Number(auctionEndBlock) - 300 : 0,
+  endBlock: auctionEndBlock ? Number(auctionEndBlock) : 0,
+  minIncrement: minIncrement || BigInt(0),  // ← SỬA: bỏ fallback minDeposit
+  maxBidders: maxBidders ? Number(maxBidders) : 50,
+  validBiddersCount: roundBidders ? (roundBidders as readonly string[]).length : 0,
+  currentLeader: leadBidder as string || '0x0000000000000000000000000000000000000000',
+  isFinalized: Number(auctionState) === 3,  // State 3 = FINALIZED
+}
 
   return {
     currentRound: currentRound ? Number(currentRound) : 0,

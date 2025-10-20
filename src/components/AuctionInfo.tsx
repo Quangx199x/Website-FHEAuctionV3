@@ -21,21 +21,21 @@ export function AuctionInfo() {
   const { hasBid, isValid, isCancelled } = useBidStatus(currentRound)
 
   const getStateBadge = () => {
-    switch (auctionState) {
-      case 'ACTIVE':
-        return <span className="status-badge connected">ACTIVE</span>
-      case 'ENDED':
-        return <span className="status-badge disconnected">ENDED</span>
-      case 'FINALIZED':
-        return <span className="status-badge disconnected">FINALIZED</span>
-      case 'IDLE':
-        return <span className="status-badge">IDLE</span>
-      case 'EMERGENCY':
-        return <span className="status-badge disconnected">EMERGENCY</span>
-      default:
-        return <span className="status-badge">LOADING...</span>
-    }
+  switch (auctionState) {
+    case 'ACTIVE':
+      return <span className="status-badge connected">ACTIVE</span>
+    case 'ENDED':
+      return <span className="status-badge disconnected">ENDED</span>
+    case 'FINALIZED':
+      return <span className="status-badge disconnected">FINALIZED</span>
+    case 'IDLE':
+      return <span className="status-badge">IDLE</span>  // ← Đây
+    case 'EMERGENCY':
+      return <span className="status-badge disconnected">EMERGENCY</span>
+    default:
+      return <span className="status-badge">LOADING...</span>
   }
+}
 
   return (
     <div className="terminal-box">

@@ -6,11 +6,13 @@ import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 
 import { AUCTION_ABI } from '../contracts/auctionABI'
 import { AUCTION_CONTRACT_ADDRESS } from '../contracts/addresses'
 import { sepolia } from 'wagmi/chains'
+import { parseEther } from 'viem'
 
 export function OwnerPanel() {
   const { address, isConnected } = useWallet()
-  const { auctionState } = useAuction()
+  const { auctionState, refetch } = useAuction()
   const [action, setAction] = useState<string>('')
+  const [isStarting, setIsStarting] = useState(false)
 
   // Read owner
   const { data: ownerAddress } = useReadContract({
@@ -58,8 +60,14 @@ export function OwnerPanel() {
     }
   }
 
-  if (isSuccess && action) {
-    alert(`✅ ${action} executed!`)
+    if (isSuccess && action) {
+    if (action === 'startAuction') {
+      alert('✅ Auction started! First bid placed.')
+      setIsStarting(false)
+      setTimeout(() => refetch(), 2000)
+    } else {
+      alert(`✅ ${action} executed!`)
+    }
     setAction('')
   }
 
@@ -86,6 +94,7 @@ export function OwnerPanel() {
         <span className="info-value">{paused ? 'YES' : 'NO'}</span>
       </div>
 
+     
       {/* Pause/Unpause */}
       <div style={{ marginTop: '15px' }}>
         <button

@@ -5,18 +5,8 @@ import { AUCTION_CONTRACT_ADDRESS } from '../contracts/addresses'
 import { sepolia } from 'wagmi/chains'
 import { useWallet } from './useWallet'
 
-type BidderInfo = readonly [bigint, boolean, boolean]
-
-interface BidStatus {
-  hasBid: boolean
-  isValid: boolean
-  isCancelled: boolean
-  deposit: bigint
-  isLoading: boolean
-  refetch: () => void
-}
-
-export function useBidStatus(_roundId: number): BidStatus {
+// Thêm _ prefix để đánh dấu không dùng
+export function useBidStatus(_roundId: number) {  // ← THÊM _ 
   const { address } = useWallet()
 
   const { data: bidderInfo, isLoading, refetch } = useReadContract({

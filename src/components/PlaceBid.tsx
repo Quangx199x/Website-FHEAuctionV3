@@ -2,18 +2,25 @@
 import { useState, useEffect } from 'react'
 import { useWallet } from '../hooks/useWallet'
 import { useAuction } from '../hooks/useAuction'
-import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
+import { useWriteContract, useWaitForTransactionReceipt, useWalletClient } from 'wagmi' // ✅ Thêm useWalletClient
 import { AUCTION_ABI } from '../contracts/auctionABI'
 import { AUCTION_CONTRACT_ADDRESS } from '../contracts/addresses'
 import { parseEther } from 'viem'
+import { initializeFheRelayer, encryptBidWithRelayer } from '../services/fheRelayer'
 import './PlaceBid.css'
 
 export function PlaceBid() {
-  const { isConnected, isWrongNetwork } = useWallet()
+  const { isConnected, isWrongNetwork, address } = useWallet()
   const { currentRound, auction, auctionState, auctionStateRaw, refetch } = useAuction()
+  
+  // ✅ Thêm walletClient để sign
+  const { data: walletClient } = useWalletClient()
   
   const [bidAmount, setBidAmount] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isEncrypting, setIsEncrypting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [encryptionProgress, setEncryptionProgress] = useState('')
 
   const { writeContract, data: hash } = useWriteContract()
   
@@ -21,75 +28,160 @@ export function PlaceBid() {
     hash,
   })
 
-  // Debug log
-  useEffect(() => {
-    console.log('📊 PlaceBid Component State:')
-    console.log('  - auctionState:', auctionState)
-    console.log('  - auctionStateRaw:', auctionStateRaw)
-    console.log('  - isConnected:', isConnected)
-    console.log('  - isWrongNetwork:', isWrongNetwork)
-  }, [auctionState, auctionStateRaw, isConnected, isWrongNetwork])
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError(null)
+    setEncryptionProgress('')
     
     if (!bidAmount || parseFloat(bidAmount) <= 0) {
-      alert('Please enter a valid bid amount')
+      setError('Please enter a valid bid amount')
       return
     }
 
-    // Check state again
-    if (auctionStateRaw !== 1) {
-      alert(`Cannot bid: Auction state is ${auctionState} (${auctionStateRaw})`)
+    if (!address) {
+      setError('Wallet not connected')
+      return
+    }
+
+    if (!walletClient) {
+      setError('Wallet client not available')
+      return
+    }
+
+    if (auctionStateRaw !== 0) {
+      setError(`Cannot bid: Auction is ${auctionState}`)
       return
     }
 
     setIsSubmitting(true)
+    setIsEncrypting(true)
     
     try {
       const bidWei = parseEther(bidAmount)
-      
       console.log('💰 Placing bid:', bidAmount, 'ETH')
       console.log('📊 Wei:', bidWei.toString())
+
+      // Step 1: Initialize Relayer
+      setEncryptionProgress('Initializing FHE Relayer...')
+      console.log('[Bid] Step 1/5: Initializing...')
       
-      const dummyEncrypted = ('0x' + '00'.repeat(32)) as `0x${string}`
-      const dummyProof = '0x' as `0x${string}`
-      const dummyPublicKey = ('0x' + '00'.repeat(32)) as `0x${string}`
-      const dummySignature = '0x' as `0x${string}`
+      await initializeFheRelayer()
+      console.log('[Bid] ✓ Initialized')
+
+      // Step 2: Encrypt via Relayer
+      setEncryptionProgress('Encrypting bid via Relayer...')
+      console.log('[Bid] Step 2/5: Encrypting...')
       
-      console.log('📤 Submitting to contract...')
+      const encryptedData = await encryptBidWithRelayer(
+        bidWei,
+        AUCTION_CONTRACT_ADDRESS,
+        address
+      )
+      
+      console.log('[Bid] ✓ Encrypted')
+      setIsEncrypting(false)
+
+      // Step 3: Extract data
+      setEncryptionProgress('Preparing transaction...')
+      console.log('[Bid] Step 3/5: Extracting data...')
+      
+      const handles = encryptedData.handles || []
+      const proof = encryptedData.inputProof || new Uint8Array()
+      
+      if (handles.length === 0) {
+        throw new Error('No encrypted handles')
+      }
+
+      // Convert to hex
+      const toHex = (bytes: Uint8Array): `0x${string}` => {
+        return `0x${Array.from(bytes)
+          .map(b => b.toString(16).padStart(2, '0'))
+          .join('')}` as `0x${string}`
+      }
+
+      const encryptedBid = toHex(handles[0])
+      const inputProof = toHex(proof)
+
+      console.log('[Bid] ✓ Encrypted bid:', encryptedBid.slice(0, 20) + '...')
+      console.log('[Bid] ✓ Proof length:', inputProof.length)
+
+      // ✅ Step 4: Generate EIP-712 Signature
+      setEncryptionProgress('Signing EIP-712 message...')
+      console.log('[Bid] Step 4/5: Generating signature...')
+      
+      const domain = {
+        name: 'FHEAuction',
+        version: '3',
+        chainId: 11155111,
+        verifyingContract: AUCTION_CONTRACT_ADDRESS,
+      } as const
+
+      const types = {
+        PublicKey: [{ name: 'key', type: 'bytes32' }],
+      } as const
+
+      const message = {
+        key: encryptedBid, // ✅ Dùng encrypted bid làm publicKey
+      } as const
+
+      console.log('[Bid] Signing message:', message)
+
+      const signature = await walletClient.signTypedData({
+        account: address,
+        domain,
+        types,
+        primaryType: 'PublicKey',
+        message,
+      })
+
+      console.log('[Bid] ✓ Signature:', signature.slice(0, 20) + '...')
+
+      // ✅ Step 5: Submit with REAL signature
+      setEncryptionProgress('Submitting...')
+      console.log('[Bid] Step 5/5: Submitting...')
       
       writeContract({
         address: AUCTION_CONTRACT_ADDRESS,
         abi: AUCTION_ABI,
         functionName: 'bid',
-        args: [dummyEncrypted, dummyProof, dummyPublicKey, dummySignature],
+        args: [
+          encryptedBid,    // ✅ encrypted bid
+          inputProof,      // ✅ proof
+          encryptedBid,    // ✅ publicKey = encrypted bid
+          signature,       // ✅ REAL EIP-712 signature
+        ],
         value: bidWei,
+        gas: 800000n,
       })
-      
+
+      console.log('[Bid] ✓ Transaction submitted!')
+
     } catch (error) {
-      console.error('❌ Error:', error)
-      alert('Failed: ' + (error as Error).message)
+      console.error('[Bid] ❌ Error:', error)
+      setError((error as Error).message || 'Failed to place bid')
+    } finally {
       setIsSubmitting(false)
+      setIsEncrypting(false)
+      setEncryptionProgress('')
     }
   }
 
-  if (isSuccess && isSubmitting) {
-    setIsSubmitting(false)
-    console.log('🎉 Bid placed successfully!')
-    alert('🎉 Bid placed!')
-    setBidAmount('')
-    // Refetch data
-    setTimeout(() => refetch(), 2000)
-  }
+  useEffect(() => {
+    if (isSuccess && isSubmitting) {
+      console.log('🎉 Success!')
+      alert('🎉 Bid placed successfully!')
+      setBidAmount('')
+      setError(null)
+      setTimeout(() => refetch(), 2000)
+    }
+  }, [isSuccess, isSubmitting, refetch])
 
-  // Check if auction is truly active (state = 1)
-  const isAuctionActive = auctionStateRaw === 1
+  const isAuctionActive = auctionStateRaw === 0
   const isDisabled = !isConnected || isWrongNetwork || !isAuctionActive || isSubmitting || isConfirming
 
   return (
     <div className="terminal-box">
-      <div className="terminal-title">&gt; PLACE BID</div>
+      <div className="terminal-title">&gt; PLACE BID (FHE RELAYER)</div>
 
       <form onSubmit={handleSubmit}>
         <div className="input-group">
@@ -123,39 +215,72 @@ export function PlaceBid() {
           <span className="info-label">[STATE]</span>
           <span className="info-value">
             {isAuctionActive ? (
-              <span className="ready-status">✅ ACTIVE (Ready to bid)</span>
+              <span className="ready-status">✅ ACTIVE</span>
             ) : (
-              <span className="error-status">❌ {auctionState} (State: {auctionStateRaw})</span>
+              <span className="error-status">❌ {auctionState}</span>
             )}
           </span>
         </div>
 
-        {/* Warnings */}
+        <div className="info-row">
+          <span className="info-label">[ENCRYPTION]</span>
+          <span className="info-value">
+            {isEncrypting ? (
+              <span className="blink">🔐 ENCRYPTING...</span>
+            ) : (
+              <span className="ready-status">✓ RELAYER</span>
+            )}
+          </span>
+        </div>
+
+        {encryptionProgress && (
+          <div className="encryption-progress-box">
+            <span className="blink">⏳</span> {encryptionProgress}
+          </div>
+        )}
+
+        {error && (
+          <div className="warning-box">
+            ❌ {error}
+          </div>
+        )}
+
         {!isConnected && (
-          <div className="warning-box">⚠️ Connect wallet to place bid</div>
+          <div className="warning-box">⚠️ Connect wallet</div>
         )}
 
         {isConnected && isWrongNetwork && (
-          <div className="warning-box">⚠️ Switch to Sepolia network</div>
+          <div className="warning-box">⚠️ Switch to Sepolia</div>
         )}
 
         {isConnected && !isWrongNetwork && !isAuctionActive && (
           <div className="warning-box">
-            ⚠️ Auction is {auctionState} (State code: {auctionStateRaw}). 
-            {auctionStateRaw === 0 && ' Auction not started yet.'}
-            {auctionStateRaw === 2 && ' Auction has ended.'}
-            {auctionStateRaw === 3 && ' Auction finalized.'}
+            ⚠️ Auction is {auctionState}
           </div>
         )}
 
         <button type="submit" className="btn submit-btn-full" disabled={isDisabled}>
-          {isSubmitting ? '⏳ SUBMITTING...' : isConfirming ? '⏳ CONFIRMING...' : 'PLACE BID'}
+          {isEncrypting ? (
+            <>🔐 ENCRYPTING<span className="blink">...</span></>
+          ) : isSubmitting ? (
+            <>📡 SUBMITTING<span className="blink">...</span></>
+          ) : isConfirming ? (
+            <>⏳ CONFIRMING<span className="blink">...</span></>
+          ) : (
+            '🔒 PLACE ENCRYPTED BID'
+          )}
         </button>
 
         <div className="fhe-info-box">
-          💰 Your bid will be submitted to the contract with your deposit.
+          🚀 <strong>Zama FHE Relayer SDK v0.2.0</strong>
           <br />
-          Debug: State={auctionStateRaw}, Active={isAuctionActive ? 'Yes' : 'No'}
+          🔐 Encryption via Zama Relayer API
+          <br />
+          ⚡ No WASM - Works everywhere!
+          <br />
+          🔒 100% Privacy guaranteed
+          <br />
+          ✍️ EIP-712 Signature Verification
         </div>
       </form>
     </div>
